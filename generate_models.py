@@ -580,6 +580,16 @@ def build_main_enclosure() -> cq.Workplane:
     assert enclosure.val() is not None and enclosure.val().isValid(), "Step A9 failed validation"
     print("  A9 Front vents... ok")
 
+    # A10 — GSM floor vents
+    # 3 circular vents (∅4 mm) on the floor of the enclosure underneath the GSM module
+    # to allow bottom-to-top convection air current.
+    print("  A10 GSM floor vents...")
+    for vy in [-34.0, -28.0, -22.0]:
+        floor_vent = cq.Workplane("XY").cylinder(T + 1.0, 2.0, centered=(True, True, True)).translate((48.0, vy, T / 2.0))
+        enclosure = enclosure.cut(floor_vent)
+    assert enclosure.val() is not None and enclosure.val().isValid(), "Step A10 failed validation"
+    print("  A10 GSM floor vents... ok")
+
     return enclosure
 
 
@@ -719,6 +729,41 @@ def build_top_lid() -> cq.Workplane:
     lid = lid.cut(pry_notch)
     assert lid.val() is not None and lid.val().isValid(), "Step B6 failed validation"
     print("  B6 Lid pry notch... ok")
+
+    # B7 — TFT display mounting bosses (4x) on lid underside
+    # These allow mounting the TFT display module to the lid with M2 screws.
+    # Spaced at 66mm × 42mm, height 2.5mm, pilot holes ∅2mm.
+    print("  B7 TFT mounting bosses...")
+    tft_boss_h = 2.5
+    tft_boss_r = 2.5
+    tft_pilot_r = 1.0
+    tft_dx = TFT_VIEWPORT[0] / 2.0 - 1.0  # = 33.0 mm
+    tft_dy = TFT_VIEWPORT[1] / 2.0 - 1.0  # = 21.0 mm
+    tft_pegs = [
+        (TFT_ORIG[0] - tft_dx, TFT_ORIG[1] - tft_dy),
+        (TFT_ORIG[0] + tft_dx, TFT_ORIG[1] - tft_dy),
+        (TFT_ORIG[0] + tft_dx, TFT_ORIG[1] + tft_dy),
+        (TFT_ORIG[0] - tft_dx, TFT_ORIG[1] + tft_dy)
+    ]
+    # Create bosses on the lid underside plate plane (Z = -LID_LIP = -2.0)
+    tft_bosses = cq.Workplane("XY").workplane(offset=-LID_LIP - tft_boss_h)
+    tft_bosses = tft_bosses.pushPoints(tft_pegs).circle(tft_boss_r).extrude(tft_boss_h)
+    tft_bosses = tft_bosses.faces(">Z").circle(tft_pilot_r).cutThruAll()
+    lid = lid.union(tft_bosses)
+    assert lid.val() is not None and lid.val().isValid(), "Step B7 failed validation"
+    print("  B7 TFT mounting bosses... ok")
+
+    # B8 — MCU hold-down ribs (2x) on lid underside
+    # These extend down from the lid plate underside to Z = 30.7 mm (local Z = -7.3 mm)
+    # to hold the Arduino pre-assembled case securely on the floor retention bosses.
+    # Placed on the left and right margins of the case to avoid blocking honeycomb vents.
+    print("  B8 MCU hold-down ribs...")
+    rib_h = 7.3  # extends from plate underside (Z = 0) down to Z = 30.7 mm
+    rib1 = cq.Workplane("XY").workplane(offset=-rib_h).box(3.0, 15.0, rib_h, centered=(True, True, False)).translate((-55.0, 10.0, 0))
+    rib2 = cq.Workplane("XY").workplane(offset=-rib_h).box(3.0, 15.0, rib_h, centered=(True, True, False)).translate((25.0, 10.0, 0))
+    lid = lid.union(rib1).union(rib2)
+    assert lid.val() is not None and lid.val().isValid(), "Step B8 failed validation"
+    print("  B8 MCU hold-down ribs... ok")
 
     return lid
 
