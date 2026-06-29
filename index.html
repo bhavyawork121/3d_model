@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AirQuest v3 — 3D Visualizer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --bg: #0c0e12;
+      --card: rgba(18,22,30,0.82);
+      --border: rgba(255,255,255,0.08);
+      --accent: #00e5ff;
+      --glow: rgba(0,229,255,0.15);
+      --txt: #f0f2f5;
+      --muted: #8b949e;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Outfit', sans-serif; background: var(--bg); color: var(--txt); overflow: hidden; height: 100vh; }
+
+    #three-canvas { position: fixed; inset: 0; z-index: 1; }
+
+    .ui {
+      position: fixed; inset: 0; z-index: 10;
+      pointer-events: none;
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      grid-template-rows: auto 1fr;
+      gap: 20px; padding: 20px;
+    }
+
+    .glass {
+      background: var(--card);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: 0 8px 40px rgba(0,0,0,.5);
+    }
+
+    header {
+      grid-column: 1/-1;
+      padding: 16px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      pointer-events: auto;
+    }
+    h1 {
+      font-size: 22px; font-weight: 800;
+      background: linear-gradient(130deg,#fff 40%,var(--accent));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .sub { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 2px; margin-top: 3px; }
+    .badge {
+      font-size: 11px; font-weight: 700; padding: 4px 12px; border-radius: 20px;
+      border: 1px solid var(--accent); color: var(--accent); background: var(--glow);
+      text-transform: uppercase; letter-spacing: 1px;
+    }
+
+    .panel {
+      grid-column: 1;
+      padding: 22px;
+      display: flex; flex-direction: column; gap: 20px;
+      pointer-events: auto; overflow-y: auto;
+    }
+
+    .sec-title {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 1.5px; color: var(--muted);
+      border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 4px;
+    }
+
+    button.view-btn {
+      width: 100%; padding: 10px 14px;
+      background: rgba(255,255,255,.04); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--txt); font-family: inherit;
+      font-size: 13px; font-weight: 600; cursor: pointer; text-align: left;
+      transition: all .2s;
+    }
+    button.view-btn:hover { background: rgba(255,255,255,.09); }
+    button.view-btn.active { background: var(--glow); border-color: var(--accent); color: var(--accent); }
+
+    .slider-wrap { display: flex; flex-direction: column; gap: 6px; }
+    .slider-wrap span { font-size: 12px; color: var(--muted); }
+    input[type=range] {
+      -webkit-appearance: none; width: 100%; height: 5px;
+      background: rgba(255,255,255,.12); border-radius: 3px; outline: none;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 16px; height: 16px;
+      border-radius: 50%; background: var(--accent); cursor: pointer;
+    }
+
+    .toggle-row {
+      display: flex; justify-content: space-between; align-items: center; padding: 4px 0;
+    }
+    .toggle-row label { font-size: 13px; }
+    .sw { position: relative; display: inline-block; width: 42px; height: 22px; }
+    .sw input { opacity: 0; width: 0; height: 0; }
+    .track {
+      position: absolute; inset: 0; background: rgba(255,255,255,.12);
+      border-radius: 34px; border: 1px solid var(--border); cursor: pointer;
+      transition: background .3s;
+    }
+    .track::before {
+      content: ''; position: absolute;
+      width: 14px; height: 14px; left: 3px; bottom: 3px;
+      background: #fff; border-radius: 50%; transition: transform .3s;
+    }
+    .sw input:checked + .track { background: var(--accent); }
+    .sw input:checked + .track::before { transform: translateX(20px); }
+
+    .legend { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
+    .legend-item { display: flex; align-items: center; gap: 9px; font-size: 12px; color: var(--muted); }
+    .dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+
+    #loading {
+      position: fixed; inset: 0; z-index: 100;
+      background: var(--bg); display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 18px;
+      transition: opacity .6s;
+    }
+    .spin {
+      width: 48px; height: 48px; border: 3px solid rgba(255,255,255,.1);
+      border-top-color: var(--accent); border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #load-text { font-size: 14px; font-weight: 600; letter-spacing: 2px; color: var(--muted); }
+    #load-progress { font-size: 20px; font-weight: 800; color: var(--accent); }
+  </style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="spin"></div>
+  <div id="load-progress">0 / 3</div>
+  <div id="load-text">LOADING STL MODELS…</div>
+</div>
+
+<canvas id="three-canvas"></canvas>
+
+<div class="ui">
+  <header class="glass">
+    <div>
+      <h1>AirQuest v3 Enclosure</h1>
+      <div class="sub">Interactive 3D Visualizer</div>
+    </div>
+    <div class="badge">V3 Assembly</div>
+  </header>
+
+  <div class="panel glass">
+    <div>
+      <div class="sec-title">Camera Views</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button class="view-btn active" id="btn-iso">Isometric</button>
+        <button class="view-btn" id="btn-top">Top</button>
+        <button class="view-btn" id="btn-front">Front</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="sec-title">Explode</div>
+      <div class="slider-wrap">
+        <span id="explode-label">0%</span>
+        <input type="range" id="explode" min="0" max="100" value="0" />
+      </div>
+    </div>
+
+    <div>
+      <div class="sec-title">Toggle Parts</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div class="toggle-row"><label>Main Enclosure</label><label class="sw"><input type="checkbox" id="t-enc" checked><span class="track"></span></label></div>
+        <div class="toggle-row"><label>Top Lid</label><label class="sw"><input type="checkbox" id="t-lid" checked><span class="track"></span></label></div>
+        <div class="toggle-row"><label>Vent Door</label><label class="sw"><input type="checkbox" id="t-door" checked><span class="track"></span></label></div>
+        <div class="toggle-row"><label>Arduino Case</label><label class="sw"><input type="checkbox" id="t-ard" checked><span class="track"></span></label></div>
+        <div class="toggle-row"><label>GSM Board</label><label class="sw"><input type="checkbox" id="t-gsm" checked><span class="track"></span></label></div>
+        <div class="toggle-row"><label>Sensor Board</label><label class="sw"><input type="checkbox" id="t-sen" checked><span class="track"></span></label></div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <div class="sec-title" style="border:none;padding:0;margin:0">Color Key</div>
+      <div class="legend-item"><div class="dot" style="background:#a3a3a3"></div>Main Enclosure (ABS)</div>
+      <div class="legend-item"><div class="dot" style="background:#7a7a7a"></div>Top Lid</div>
+      <div class="legend-item"><div class="dot" style="background:#d0d0d0"></div>Vent Door (bayonet)</div>
+      <div class="legend-item"><div class="dot" style="background:#1eb980"></div>Arduino R4 case (88×68×28)</div>
+      <div class="legend-item"><div class="dot" style="background:#0071b2"></div>GSM SIM800L</div>
+      <div class="legend-item"><div class="dot" style="background:#e86300"></div>Sensor Board</div>
+    </div>
+  </div>
+</div>
+
+<!-- Three.js from CDN — no bundler needed -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { STLLoader }     from 'three/addons/loaders/STLLoader.js';
+
+// ── Scene ──────────────────────────────────────────────────────────────────
+const canvas = document.getElementById('three-canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0c0e12);
+scene.fog = new THREE.FogExp2(0x0c0e12, 0.003);
+
+const camera = new THREE.PerspectiveCamera(42, 1, 0.5, 2000);
+camera.position.set(220, -260, 180);
+
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.target.set(0, 10, 19);
+
+// ── Resize ─────────────────────────────────────────────────────────────────
+function resize() {
+  renderer.setSize(innerWidth, innerHeight);
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ── Lights ─────────────────────────────────────────────────────────────────
+scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+
+const sun = new THREE.DirectionalLight(0xfff8f0, 1.1);
+sun.position.set(120, -80, 200);
+sun.castShadow = true;
+sun.shadow.mapSize.setScalar(2048);
+scene.add(sun);
+
+const fill = new THREE.DirectionalLight(0x00e5ff, 0.28);
+fill.position.set(-200, 120, -60);
+scene.add(fill);
+
+const rim = new THREE.DirectionalLight(0xffffff, 0.18);
+rim.position.set(0, 200, -100);
+scene.add(rim);
+
+// ── Grid ───────────────────────────────────────────────────────────────────
+const grid = new THREE.GridHelper(500, 40, 0x00e5ff, 0x1a2030);
+grid.position.y = 0;
+grid.rotation.x = Math.PI / 2;
+grid.position.z = -2;
+scene.add(grid);
+
+// ── Parts config ──────────────────────────────────────────────────────────
+// Positions match CadQuery coordinate system (Z-up, enclosure centred at XY)
+const PARTS = [
+  {
+    name: 'main_enclosure', stl: 'main_enclosure.stl',
+    color: 0xa8a8a8, roughness: 0.35, metalness: 0.08, opacity: 1,
+    base: [0, 0, 0],      explode: [0, 0, -38]
+  },
+  {
+    name: 'top_lid', stl: 'top_lid.stl',
+    color: 0x767676, roughness: 0.3, metalness: 0.1, opacity: 0.92,
+    base: [0, 0, 38.0],   explode: [0, 0, 60]
+  },
+  {
+    name: 'vent_door', stl: 'vent_door.stl',
+    color: 0xd8d8d8, roughness: 0.2, metalness: 0.15, opacity: 1,
+    base: [50, 12, 35.0], explode: [0, 0, 90]
+  },
+  // Boards as coloured boxes (loaded immediately, no 404 risk)
+  {
+    name: 'arduino_board', box: [88, 68, 28],
+    color: 0x1eb980, roughness: 0.4, metalness: 0.05, opacity: 0.88,
+    base: [-15, 10, 2.5], explode: [0, 0, -14]
+  },
+  {
+    name: 'gsm_board', box: [25, 23, 1.6],
+    color: 0x0071b2, roughness: 0.4, metalness: 0.1, opacity: 0.9,
+    base: [48, -28, 6.5], explode: [0, 0, -10]
+  },
+  {
+    name: 'sensor_board', box: [30, 30, 5],
+    color: 0xe86300, roughness: 0.45, metalness: 0.05, opacity: 0.9,
+    base: [50, 12, 2.5],  explode: [0, 0, -10]
+  }
+];
+
+const groups = {};
+PARTS.forEach(p => {
+  const g = new THREE.Group();
+  g.position.set(...p.base);
+  scene.add(g);
+  groups[p.name] = g;
+});
+
+// ── STL Loader ────────────────────────────────────────────────────────────
+const loader = new STLLoader();
+const stlParts = PARTS.filter(p => p.stl);
+let loaded = 0;
+
+const progEl  = document.getElementById('load-progress');
+const loadDiv = document.getElementById('loading');
+
+function onLoaded() {
+  loaded++;
+  progEl.textContent = `${loaded} / ${stlParts.length}`;
+  if (loaded >= stlParts.length) {
+    loadDiv.style.opacity = 0;
+    setTimeout(() => loadDiv.style.display = 'none', 600);
+  }
+}
+
+stlParts.forEach(p => {
+  const mat = new THREE.MeshStandardMaterial({
+    color: p.color, roughness: p.roughness, metalness: p.metalness,
+    transparent: p.opacity < 1, opacity: p.opacity
+  });
+  loader.load(
+    p.stl,
+    geo => {
+      // STL from CadQuery is already in world coords — don't re-centre
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.castShadow = mesh.receiveShadow = true;
+      // No offset needed since STL files are in local coordinates (origin at Z=0).
+      mesh.position.set(0, 0, 0);
+      groups[p.name].add(mesh);
+      onLoaded();
+    },
+    undefined,
+    err => {
+      console.warn('STL load failed:', p.stl, err);
+      // Fallback coloured box so something is visible
+      const fbMat = new THREE.MeshStandardMaterial({ color: p.color, roughness: 0.4 });
+      const fbGeo = new THREE.BoxGeometry(40, 40, 10);
+      groups[p.name].add(new THREE.Mesh(fbGeo, fbMat));
+      onLoaded();
+    }
+  );
+});
+
+// Boards (boxes) — instant, no loading needed
+PARTS.filter(p => p.box).forEach(p => {
+  const mat = new THREE.MeshStandardMaterial({
+    color: p.color, roughness: p.roughness, metalness: p.metalness,
+    transparent: true, opacity: p.opacity
+  });
+  const geo = new THREE.BoxGeometry(...p.box);
+  geo.translate(0, 0, p.box[2] / 2); // floor-align
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.castShadow = mesh.receiveShadow = true;
+  groups[p.name].add(mesh);
+});
+
+// ── Explode ───────────────────────────────────────────────────────────────
+let explodeT = 0;
+function setExplode(t) {
+  explodeT = t;
+  PARTS.forEach(p => {
+    const g = groups[p.name];
+    g.position.set(
+      p.base[0] + p.explode[0] * t,
+      p.base[1] + p.explode[1] * t,
+      p.base[2] + p.explode[2] * t
+    );
+  });
+}
+
+// ── Camera presets ────────────────────────────────────────────────────────
+function goIso()   { camera.position.set( 220, -260, 180); controls.target.set(0, 10, 19); }
+function goTop()   { camera.position.set(   0,    0, 400); controls.target.set(0,  0, 19); }
+function goFront() { camera.position.set(   0, -350, 60);  controls.target.set(0,  0, 19); }
+
+// ── UI wiring ─────────────────────────────────────────────────────────────
+const expSlider = document.getElementById('explode');
+const expLabel  = document.getElementById('explode-label');
+expSlider.addEventListener('input', e => {
+  const v = +e.target.value;
+  expLabel.textContent = v + '%';
+  setExplode(v / 100);
+});
+
+[['btn-iso', goIso], ['btn-top', goTop], ['btn-front', goFront]].forEach(([id, fn]) => {
+  document.getElementById(id).addEventListener('click', () => {
+    document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    fn(); controls.update();
+  });
+});
+
+const toggleMap = {
+  't-enc':  'main_enclosure',
+  't-lid':  'top_lid',
+  't-door': 'vent_door',
+  't-ard':  'arduino_board',
+  't-gsm':  'gsm_board',
+  't-sen':  'sensor_board'
+};
+Object.entries(toggleMap).forEach(([cbId, name]) => {
+  document.getElementById(cbId).addEventListener('change', e => {
+    groups[name].visible = e.target.checked;
+  });
+});
+
+// ── Render loop ───────────────────────────────────────────────────────────
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
