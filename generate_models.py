@@ -590,29 +590,36 @@ def build_main_enclosure() -> cq.Workplane:
     assert enclosure.val() is not None and enclosure.val().isValid(), "Step A10 failed validation"
     print("  A10 GSM floor vents... ok")
 
-    # A11 — Lanyard / hook loop on right wall
-    # A circular eyelet tab of radius 5.0 mm, height 6.0 mm on the right wall
-    # to attach a lanyard, string, knot, or carrying hook.
+    # A11 — Streamlined Lanyard Loop on right wall
+    # An organic fin/wing tab that curves smoothly out of the right wall and blends back in.
+    # Spans Y from 26.0 to 45.0 mm, height 6.0 mm.
     print("  A11 Lanyard loop...")
-    loop_cx = L / 2.0 + 3.5  # = 71.0 mm (extends outside wall)
-    loop_cy = W / 2.0 - 15.0  # = 32.5 mm (near back-right corner)
     loop_h = 6.0
-    loop_r = 5.0
     loop_hole_r = 2.0
     
-    # Outer tab cylinder
+    loop_points = [
+        (67.5, 26.0),
+        (70.5, 31.0),
+        (73.0, 35.0),
+        (73.5, 37.5),
+        (73.0, 40.0),
+        (70.5, 44.0),
+        (67.5, 45.0)
+    ]
     loop_tab = (
         cq.Workplane("XY")
-        .cylinder(loop_h, loop_r, centered=(True, True, False))
-        .translate((loop_cx, loop_cy, 0))
+        .moveTo(loop_points[0][0], loop_points[0][1])
     )
+    for pt in loop_points[1:]:
+        loop_tab = loop_tab.lineTo(pt[0], pt[1])
+    loop_tab = loop_tab.close().extrude(loop_h)
     enclosure = enclosure.union(loop_tab)
     
-    # Inner hole
+    # Cut the eyelet hole (centered at X=70.5, Y=37.5)
     loop_hole = (
         cq.Workplane("XY")
         .cylinder(loop_h + 1.0, loop_hole_r, centered=(True, True, False))
-        .translate((loop_cx, loop_cy, -0.5))
+        .translate((70.5, 37.5, -0.5))
     )
     enclosure = enclosure.cut(loop_hole)
     assert enclosure.val() is not None and enclosure.val().isValid(), "Step A11 failed validation"
